@@ -1,0 +1,205 @@
+Your First Predicted Character in PurrNet: A Step-by-Step Tutorial
+
+Introduction: Why Prediction Matters
+
+In online games, client-side prediction is the key to delivering "snappier movement," "better physics," and making cheating a lot harder. It is a powerful technique that solves the fundamental problem of input lag, which is the delay between when you press a key and when you see the result on screen.
+
+Think about a single-player game. Every interaction is instant because it all happens on your local machine. In a multiplayer game, however, we don't have that luxury. Your inputs must travel to a server and back, a round-trip time we call "ping." Without prediction, your character would feel sluggish and unresponsive, waiting for the server to confirm every move. PurrNet's prediction system is designed to mitigate this very issue by intelligently guessing the outcome of your actions locally.
+
+The goal of this tutorial is to guide you through building a simple, predicted character from scratch, giving you a hands-on understanding of this essential networking technique.
+
+
+--------------------------------------------------------------------------------
+
+
+1. Understanding the Magic: How Prediction Works
+
+At a high level, PurrNet's prediction works by having every client simulate the game locally based on the last verified information it received from the server. Imagine this verified data as "green beans" arriving every tick—information that is 100% true and confirmed.
+
+Because of ping, your client is always a few ticks behind the server's authoritative simulation. Let's imagine an extreme case: a 300ms ping on a game running at 10 ticks per second. This means your client is a full three ticks behind the server. To catch up and provide an instant experience, your client must simulate forward and "predict the future." If a prediction turns out to be wrong when the verified data arrives, the system corrects it. This correction is what players in many games experience as "rubber banding"—when your character snaps back to a previous position.
+
+This constant prediction and correction can look jittery behind the scenes. To solve this, PurrNet relies on a critical principle: separating functionality from visuals.
+
+* Functionality (The "Real" Simulation): All the important calculations, such as physics and collision detection, happen on a precisely predicted object. In the system's internal logic, this is like a "blue capsule" that jumps and corrects itself as new server data arrives.
+* Visuals (The "Smooth" Representation): The model you actually see—the "pink capsule"—is smoothly interpolated to follow the functional object. This hides the jittery corrections, giving you the dual benefit of responsive controls and smooth, clean graphics.
+
+The Golden Rule of Prediction
+
+The source author is emphatic on this point: avoid mixing normal networking concepts like RPCs with the prediction workflow for now. As he says, "They don't mix well." Anything that impacts prediction must also be predicted.
+
+Now that we've covered the theory, let's put it into practice.
+
+
+--------------------------------------------------------------------------------
+
+
+2. Preparing the Scene: The Prediction Foundation
+
+This tutorial assumes you have a basic Unity scene with a PurrNet Network Manager already set up. From here, we'll add the core components for the prediction system.
+
+1. Add the Prediction Manager: In your scene, add the Prediction Manager component. This component is the central hub for the entire prediction system, managing all predicted objects and simulations.
+2. Analyze Key Manager Settings: The Prediction Manager has several settings, but two are most important for beginners:
+
+Setting	Purpose
+Physics Provider	This allows you to choose which physics engine to use (e.g., Unity Physics 3D). Its modular design supports future systems, like custom or fully deterministic physics.
+Predicted Prefabs	This list must contain every prefab you intend to spawn with prediction. It will auto-populate as you create new predicted prefabs.
+
+1. Add the Player Spawner: Next, add the Predicted Player Spawner component to your scene. This is a simple helper component that automatically handles spawning the correct player prefab for each client that connects to the game.
+
+With the scene's foundation in place, it's time to build the object that this spawner will create.
+
+
+--------------------------------------------------------------------------------
+
+
+3. Building the Player Prefab: Logic and Visuals
+
+In this section, we will create the player character prefab, focusing on the essential principle of separating its functional and visual parts.
+
+3.1. The Core Structure
+
+Let's create the basic hierarchy for our player.
+
+1. Create an empty GameObject and name it Player. This will be the root object and will handle all functionality.
+2. Create a child empty GameObject under Player and name it Visuals.
+3. To give our character a body, let's add a Sphere 3D object as a child of the Visuals object.
+
+Hierarchy Rule
+
+Remember the core principle: anything visual should go under the Visuals object, and anything functional (like colliders and scripts) should be on the root Player object.
+
+3.2. Adding Prediction Components
+
+With the hierarchy complete, we can add the necessary PurrNet components.
+
+1. Select the root Player object.
+2. Add the Predicted Rigid Body component. This powerful helper automatically handles the prediction of physics properties like velocity and makes it easy to work with collision events. Adding it will also automatically add the Predicted Transform component.
+3. The Predicted Transform is responsible for two key jobs: correctly moving the object's transform during the simulation and ensuring the visual representation remains smooth.
+
+3.3. Linking Components and Fixing Colliders
+
+Now, let's configure the components to work together correctly.
+
+1. On the Player object, locate the Predicted Transform component. Drag the Visuals GameObject from the hierarchy into its Graphics field.
+2. You will immediately see a "potential issue" warning. This is because the Sphere Collider is currently attached to our visual Sphere object, which violates our separation rule.
+3. Click the Remove button on the warning. This action correctly removes the Sphere Collider component from the child visual object.
+4. Finally, to ensure our player can collide with the world, let's add a Sphere Collider component directly to the root Player object.
+
+Our player object is now correctly configured. Let's turn it into a reusable prefab.
+
+
+--------------------------------------------------------------------------------
+
+
+4. Finalizing the Setup
+
+We just need to link our new player prefab to the scene's spawner to complete the setup.
+
+1. Turn your configured Player GameObject into a prefab by dragging it from the Hierarchy window into your Project window.
+2. Select the Prediction Manager in your scene. In the Inspector, confirm that your new Player prefab has been automatically added to the Predicted Prefabs list.
+3. Select the Predicted Player Spawner in your scene and drag the Player prefab from your project files into its Player Prefab field. This component handles spawning the player with ownership given to the client who joins.
+4. Assign one or more empty GameObjects to the spawner's Spawn Points list.
+5. Delete the Player object from your scene, as the spawner will now handle creating it at runtime.
+
+With everything wired up, the last step is to write a script to control our player's movement.
+
+
+--------------------------------------------------------------------------------
+
+
+5. Scripting Player Movement
+
+This section will guide you through creating a C# script to handle player input and apply movement within the prediction simulation loop.
+
+5.1. Creating the Script and Choosing an Identity
+
+Let's create a new C# script named PlayerMovement. For this script to work with the prediction system, its class must inherit from a PredictedIdentity type. There are a few options, each with a specific purpose:
+
+* StaticIdentity: For world objects that exist in the simulation (e.g., for collision) but don't have logic that runs each tick.
+* StatelessIdentity: For objects that have simulation logic but no dynamic data that needs to be synchronized.
+* PredictedIdentity<State, Input>: The one we'll use. It's for objects that have both dynamic data (State) and react to player actions (Input).
+
+We choose this identity type because our player needs to hold state and respond to input.
+
+5.2. Defining Input and State
+
+Inside your PlayerMovement class, you must define two public structs to represent the State and Input types you specified.
+
+First, let's add the State struct. It's crucial to understand why we do this. Any dynamic data you want to track—like health, ammo, or a timer—must live inside this State struct. Why? Because the prediction system constantly rewrites this struct with validated information from the server to correct the simulation. If you stored health in a simple private field, it would be overwritten and desynchronized. By putting it in State, you ensure the system can keep your prediction accurate.
+
+public struct State : IPredictedData<State>
+{
+    public void Dispose() { }
+}
+
+
+Your IDE will likely show an error because the IPredictedData interface requires a Dispose method. You can usually have your IDE generate this for you automatically. For this example, the State struct will be empty.
+
+Next, let's add the Input struct. The purpose of this struct is to hold all the player's actions for a given simulation tick.
+
+public struct Input : IPredictedData
+{
+    public Vector2 Direction;
+}
+
+
+5.3. Capturing Player Input
+
+To capture input from the player, you must override the GetFinalInput method. This method is special because it only runs on the client that actually controls the object. Its job is to populate the Input struct with the player's actions.
+
+The following example uses Unity's old input system to populate the Direction field we defined in our Input struct.
+
+public override void GetFinalInput(ref Input input)
+{
+    input.Direction = new Vector2(UnityEngine.Input.GetAxisRaw("Horizontal"), UnityEngine.Input.GetAxisRaw("Vertical"));
+}
+
+
+5.4. Applying Movement in the Simulation
+
+The Simulate method is the heart of a predicted object. This is where the actual movement logic is executed every simulation tick.
+
+The Simulation Loop Rule
+
+This loop must be fully enclosed. Only use the state and input parameters provided by the method. Do not call Input.GetKey or similar functions here; all input must come from the input struct. And as long as you stick with those rules, everything should mostly be as easy as single player development.
+
+To complete the script, let's add a reference to the PredictedRigidBody and a variable for move force. Then, we can implement the Simulate method to apply force based on the captured input.
+
+// Add these variables at the top of your class
+[SerializeField] private PredictedRigidBody _prb;
+[SerializeField] private float _moveForce = 10f;
+
+// This is your overridden Simulate method
+public override void Simulate(ref State state, Input input)
+{
+    Vector3 moveDirection = new Vector3(input.Direction.x, 0, input.Direction.y) * _moveForce;
+    _prb.AddForce(moveDirection);
+}
+
+
+The script is complete! Now for the final assembly and testing.
+
+
+--------------------------------------------------------------------------------
+
+
+6. Putting It All Together and Testing
+
+Let's follow these final steps to get your character running in-game.
+
+1. Attach the PlayerMovement script to your Player prefab.
+2. Drag the Predicted Rigid Body component from the Player prefab into the _prb field on the PlayerMovement script component.
+3. Set the Move Force to a reasonable value, such as 10.
+4. Start the game in a multiplayer mode (e.g., using Unity's Multiplayer Play Mode package, Parallel Sync, or your preferred testing tool).
+
+You should now see a player object spawn for each connected client. Each player will be able to move their character using the horizontal and vertical input axes. Because we used a PredictedRigidBody, physics and collisions between the players will work correctly and feel responsive.
+
+
+--------------------------------------------------------------------------------
+
+
+Conclusion
+
+Congratulations! You have successfully created your first fully predicted, physics-based character in PurrNet. By separating functionality from visuals and running your logic inside the Simulate loop, you've built a character that provides smooth, responsive movement in a multiplayer environment—the foundation of any great online game.
+
+To stay up-to-date with the latest developments and interact with an awesome community, be sure to join the official PurrNet Discord!

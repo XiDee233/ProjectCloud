@@ -1,0 +1,64 @@
+---
+name: rule2
+description: 务实开发禁止伪健壮性——透明、直接、契约式编程规范
+---
+
+# Overview
+
+本规则聚焦于提升代码透明度与维护性，强调编写线性、直观、服务当下业务场景的代码，拒绝多余防御与形式化冗余，促进健壮但不过度设计的产品级开发。
+
+---
+
+## 1. YAGNI 原则（You Aren't Gonna Need It）
+
+- 拒绝推测性设计：严禁因“以后可能会扩展”而添加空接口、冗余基类、未用参数或泛化类型。
+- 需求先导：只为当前现实存在的场景编写抽象。比如如果只有 Enemy 一个实现，就无需写 IEnemy、EnemyBase。第二个变体真实上线前不做多型封装。
+
+## 2. 明确区分“逻辑错误”与“运行时异常”
+
+- 禁止无谓空引用防御：必须存在的组件（如 Character 的 Health）禁止用 if (health != null) “兜底”，否则隐藏问题。
+- 正确做法：使用 Assert、[RequireComponent] 或 Inspector 必填。让缺漏在开发期直接暴露、崩溃，而不是潜伏到生产环境。
+- 禁止空 catch：必须有补偿逻辑才可 catch。catch 后什么都不做（包括只写日志）是恶劣代码习惯。
+
+## 3. Design by Contract（契约式设计）优先于防御性编码
+
+- 通过架构保障对象存在与流程正确，而不是到处手动 null 检查。
+- 尽量保证成员如 List、Dictionary 总为 new()，调用方只需判断数据内容，而非存在性。例如：if (list.Any())，而不是 if (list != null && list.Count > 0)。
+
+## 4. 消灭无意义的胶水代码与万能参数
+
+- 拒绝仅做透传的包装（如A调用B且无附加逻辑，则合并或直接暴露B）。
+- 严禁以“可扩展”为名滥用 Dictionary<string, object>、params object[]，优先强类型，强类型就是最好的文档和测试。
+
+## 5. 编写“透明直观”的代码
+
+- 追求流程一目了然、无隐晦分支、无多余嵌套。偏向单一职责、线性处理，拒绝为“健壮”生造大而全函数。
+- 复杂边界请拆分成独立原子逻辑，以便维护与测试。
+
+---
+
+## 规则示例 (Rule in Action)
+
+**错误示范（伪健壮遮掩问题）：**
+```csharp
+public void MovePlayer(Vector3 direction) {
+    if (this.gameObject == null) return; 
+    var moveComp = GetComponent<Movement>();
+    if (moveComp != null) {
+        try {
+            moveComp.Execute(direction);
+        } catch (Exception e) {
+            Debug.LogError(e);  
+        }
+    }
+}
+```
+
+**正确做法（责任明确，问题早暴露）：**
+```csharp
+public void MovePlayer(Vector3 direction) {
+    // Movement 必有，否则开发期崩溃
+    movement.Execute(direction); 
+}
+```
+---

@@ -1,0 +1,66 @@
+---
+name: projectrules
+description: Unity 高级架构设计规范（Architecture Rules），规范项目中的多态、抽象、组件化和权责分离等核心问题，提升系统的解耦性与扩展性。
+---
+
+# Overview
+
+本规则集旨在指导 Unity 项目的架构与编码实践，强调接口/委托多态、数据/组件驱动、去中心化分类等高级设计原则。通过落地范式与反例对照，帮助开发者减少耦合、避免代码膨胀、实现灵活可拓展的业务系统。
+
+---
+
+## 1. 多态设计准则（The Gold Mantra）
+
+- 跨类统一行为 —— 接口 (Interface)：
+  - 多个种类（如角色、建筑、道具）需要参与同一业务（如受击/拾取）时，**强制定义接口**（例如 `IBeAttacked`），避免基类/继承滥用。
+- 同类差异表现 —— 委托/函数值 (Delegate/Func/Action)：
+  - 同一类型不同实例需差异化业务时，用**委托、lambda、函数指针**（如 `Action`, `Func`）注入行为，不得用继承+重写。
+
+## 2. 抽象与分类原则
+
+- **拒绝人类语义分类**：
+  - 底层逻辑不允许 “Player”“Enemy” 等人为分类，所有对象抽象为 Entity、Character 等统一类型。区分只体现在 InputProvider（AI/玩家输入）抽象。
+- **拒绝枚举膨胀**：
+  - 不允许用 enum 区分行为型变体（如子弹类型、移动方式、技能效果），一切变体类型必须用“函数即数据”替代。
+
+  反例（错误）:
+  ```csharp
+  switch(bulletType) { case Linear: ... }
+  ```
+  正例（推荐）:
+  ```csharp
+  public Func<Bullet, Vector3> CalculatePosition;
+  ```
+
+## 3. 组件化与数据驱动（Component & Data-driven）
+
+- 原子化设计：业务应拆解为最小职责单元，每个能力 MonoBehaviour 单独承载（如 “受击”“移动”“渲染”分离）。
+- 能力即组件：对象能否具备某能力，仅由挂载组件决定，而非通过继承树或类型区分。
+- 逻辑与表现彻底解耦：核心数据、角色逻辑不应与 GameObject/MonoBehaviour 等表现层代码耦合，只保持引用关系。
+
+## 4. 依赖与权责管理（Authority Rules）
+
+- 禁止双向耦合：如 Character 不能显式依赖 Map、Enemy 等任何外部对象。
+- Manager 权能集中：就是描述“能力”，不描述“裁决”。能否移动、能否被击杀，必须由外部（如 GameManager、PhysicsSystem）集中管理。
+
+  - 角色有“挪动坐标”能力，但能否移动由 GameManager/PhysicsSystem 裁决；
+  - 角色有“受击”接口，但伤害结算由 BattleManager 调度。
+
+## 5. 代码实现范式
+
+组件化、委托多态示例：
+
+```csharp
+public class HealthComponent : MonoBehaviour {
+    public int hp;
+    public Action<int> OnDamageReceived; // 用于注入实例差异化业务
+
+    public void TakeDamage(int amount) {
+        OnDamageReceived?.Invoke(amount);
+        if (hp <= 0) Die();
+    }
+}
+```
+**组件获取建议**：优先调用 `GetComponent<IInterface>()` 获取对应能力，保证架构解耦，无需“类型枚举”判断对象类别。
+
+---
