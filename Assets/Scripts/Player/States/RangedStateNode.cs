@@ -26,6 +26,7 @@ namespace Player.States
             if (movementCore != null)
             {
                 var data = movementCore.GetPersistentState();
+                // 远程攻击允许移动和旋转
                 movementCore.SetMovementLocked(ref data, false);
                 movementCore.SetRotationLocked(ref data, false);
                 currentState = new RangedData { movementData = data, isInitialized = false, fired = false };
@@ -38,17 +39,49 @@ namespace Player.States
             if (movementCore != null) movementCore.UpdatePersistentState(currentState.movementData);
         }
 
-        // 空占位符方法，绕过 PurrNet 引擎的自动调用
         protected override void Simulate(RangedInput input, ref RangedData state, float delta) { }
 
         protected override void StateSimulate(in RangedInput input, ref RangedData state, float delta)
         {
-            if (movementCore == null) return;
-
-            // 如果不是拥有者，且不是服务器，我们不应该运行模拟逻辑
+            if (movementCore == null || rangedCombatSystem == null) return;
             if (!machine.isOwner && !machine.isServer) return;
 
-        
+            // 处理移动
+            Vector3 moveDir = movementCore.CalculateCameraRelativeMovement(input.movement);
+            movementCore.ApplyAcceleratedMovement(ref state.movementData, moveDir, delta);
+
+            // 处理旋转
+            if (input.aimDirection.sqrMagnitude > 0.01f)
+            {
+                float angle = movementCore.CalculateAimAngle(input.aimDirection);
+                movementCore.ApplyRotation(ref state.movementData, angle, delta);
+            }
+
+            // 处理射击逻辑
+            if (input.primaryAttack.isPressed)
+            {
+                rangedCombatSystem.StartCharging();
+            }
+            else if (input.primaryAttack.wasReleased)
+            {
+                rangedCombatSystem.Release();
+                state.fired = true;
+            }
+
+            // 如果射击完成且没有继续按键，返回移动状态
+            if (state.fired && !rangedCombatSystem.IsFiring && !input.primaryAttack.isPressed)
+            {
+                ReturnToMovement();
+            }
+        }
+
+        private void ReturnToMovement()
+        {
+            if (machine != null)
+            {
+                var s = machine.states.FirstOrDefault(x => x is MovementStateNode);
+                if (s != null) machine.SetState(s);
+            }
         }
 
         protected override void GetFinalInput(ref RangedInput input)
@@ -56,6 +89,7 @@ namespace Player.States
             var p = controlAuthority != null ? controlAuthority.CurrentProvider : null;
             if (p == null) { input.Reset(); return; }
             
+            input.movement = p.Movement;
             input.primaryAttack = p.PrimaryAttack;
             if (input.primaryAttack.wasPressed) p.ConsumeInput(InputActionType.PrimaryAttack);
 
@@ -65,21 +99,13 @@ namespace Player.States
             input.aimDirection = p.AimWorldDirection;
         }
 
-        private void TryReturnToMovement()
-        {
-            if (machine != null)
-            {
-                var s = machine.states.FirstOrDefault(x => x is MovementStateNode);
-                if (s != null) machine.SetState(s);
-            }
-        }
-
         public struct RangedInput : IPredictedData
         {
+            public Vector2 movement;
             public InputButtonState primaryAttack;
             public InputButtonState secondaryAttack;
             public Vector3 aimDirection;
-            public void Reset() { primaryAttack = secondaryAttack = InputButtonState.None; aimDirection = Vector3.zero; }
+            public void Reset() { movement = Vector2.zero; primaryAttack = secondaryAttack = InputButtonState.None; aimDirection = Vector3.zero; }
             public void Dispose() { }
         }
 

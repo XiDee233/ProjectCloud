@@ -14,7 +14,7 @@ namespace Player.Core
         [SerializeField, Min(0f)] private float decelerationTime = 0.15f;
 
         [Header("旋转")]
-        [SerializeField, Min(0f)] private float rotationSmoothTime = 0.08f;
+        [SerializeField, Min(0f)] private float rotationSmoothTime = 0.5f;
 
         [Header("地面检测")]
         [SerializeField] private LayerMask groundMask = ~0;
@@ -31,6 +31,7 @@ namespace Player.Core
 
         public event System.Action OnLanded;
         public LayerMask GroundMask => groundMask;
+        public float MaxMoveSpeed => maxMoveSpeed;
 
         private void Awake()
         {
@@ -81,7 +82,13 @@ namespace Player.Core
             float deltaSpeed = direction.sqrMagnitude > 0f ? accelerationTime : decelerationTime;
 
             data.currentSpeed = Mathf.MoveTowards(data.currentSpeed, targetSpeed, (maxMoveSpeed / Mathf.Max(deltaSpeed, 0.001f)) * delta);
-            Vector3 totalMovement = (direction.normalized * data.currentSpeed + data.dashVelocity) * delta;
+            
+            // 计算水平速度并存入 velocity（保留 y 分量用于重力）
+            Vector3 horizontalVelocity = direction.normalized * data.currentSpeed + data.dashVelocity;
+            data.velocity.x = horizontalVelocity.x;
+            data.velocity.z = horizontalVelocity.z;
+            
+            Vector3 totalMovement = horizontalVelocity * delta;
             _controller.Move(totalMovement);
         }
 
@@ -90,7 +97,7 @@ namespace Player.Core
             if (data.rotationLocked || float.IsNaN(targetAngle)) return;
             if (data.rotationOverridden) targetAngle = data.rotationOverrideAngle;
 
-            data.rotation = Mathf.SmoothDampAngle(data.rotation, targetAngle, ref data.rotationVelocity, rotationSmoothTime);
+            data.rotation = Mathf.LerpAngle(data.rotation, targetAngle, rotationSmoothTime);
             transform.rotation = Quaternion.Euler(0f, data.rotation, 0f);
         }
 

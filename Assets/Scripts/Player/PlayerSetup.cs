@@ -1,6 +1,8 @@
 using UnityEngine;
 using Player.Core;
 using Player.States;
+using Player.Animation;
+using Player.Combat;
 using Player.Combat.Melee;
 using Player.Combat.Ranged;
 using Player.Feel;
@@ -16,6 +18,7 @@ namespace Player
         [SerializeField] private PlayerInputHandler inputHandler;
         [SerializeField] private PlayerMovementCore movementCore;
         [SerializeField] private ControlAuthority controlAuthority;
+        [SerializeField] private MovementAnimationController movementAnimController;
 
         [Header("状态机（子物体）")]
         [SerializeField] private PredictedStateMachine stateMachine;
@@ -66,15 +69,19 @@ namespace Player
             meleeCombatSystem = EnsureOrMoveComponentToChild<MeleeCombatSystem>(systemsObject);
             rangedCombatSystem = EnsureOrMoveComponentToChild<RangedCombatSystem>(systemsObject);
 
-            var meleeCombo = EnsureOrMoveComponentToChild<MeleeComboStateMachine>(systemsObject);
-            meleeCombatSystem.ComboStateMachine = meleeCombo;
+            // 确保战斗动画相关组件（使用 CombatPlayableGraph 替代 CombatPlayableDirector）
+            var combatPlayableGraph = EnsureOrMoveComponentToChild<CombatPlayableGraph>(systemsObject);
+            
+            // 确保角色动画相关组件
+            EnsureComponent<AnimationController>();
+            movementAnimController = EnsureComponent<MovementAnimationController>();
 
             InitializeComponents();
         }
 
         private void InitializeComponents()
         {
-            movementState.Initialize(movementCore, controlAuthority);
+            movementState.Initialize(movementCore, controlAuthority, movementAnimController);
             dashState.Initialize(movementCore, controlAuthority);
             meleeState.Initialize(movementCore, meleeCombatSystem, controlAuthority);
             rangedState.Initialize(movementCore, rangedCombatSystem, controlAuthority);

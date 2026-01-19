@@ -8,28 +8,25 @@ namespace Player.Combat.Melee
     {
         [Header("基础信息")]
         public string attackName;
-        [Tooltip("启动帧数量")]
-        public float startupFrames = 4f;
-        [Tooltip("判定帧数量")]
-        public float activeFrames = 8f;
-        [Tooltip("恢复帧数量")]
-        public float recoveryFrames = 12f;
+        
+        [Header("动画数据")]
+        public CombatTimelineData animationData;
 
-        [Header("控制")]
-        public float cancelWindowStart = 0.5f;
-        public float cancelWindowEnd = 1f;
+        [Header("控制属性 (可被 Timeline 覆盖)")]
         public bool lockRotation = true;
         public float movementSpeedMultiplier = 0f;
 
-        [Header("判定")]
-        public Vector3 hitboxOffset;
-        public float hitboxRadius = 0.5f;
+        [Header("基础伤害属性")]
         public int damage = 10;
         public float knockback = 5f;
 
-        [Header("连招")]
-        public MeleeAttackData[] nextPossibleAttacks;
+        [Header("判定 (建议通过 Timeline 事件定义)")]
+        public Vector3 hitboxOffset;
+        public float hitboxRadius = 0.5f;
 
-        [NonSerialized] public Func<MeleeAttackData, bool> CanComboFrom;
+        [Header("逻辑委托 (函数即数据)")]
+        // 使用委托来定义该攻击是否可以从另一个攻击连招，或者定义连招窗口
+        public Func<MeleeAttackData, bool> canComboTo;
+        public Action<MeleeAttackData> onAttackPerform;
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using Player.Core;
+using Player.Animation;
 using PurrNet.Prediction;
 using PurrNet.Prediction.StateMachine;
 using System.Linq;
@@ -10,11 +11,33 @@ namespace Player.States
     {
         [SerializeField] private PlayerMovementCore movementCore;
         [SerializeField] private ControlAuthority controlAuthority;
+        [SerializeField] private MovementAnimationController animationController;
 
-        public void Initialize(PlayerMovementCore core, ControlAuthority authority)
+        public void Initialize(PlayerMovementCore core, ControlAuthority authority, MovementAnimationController animController = null)
         {
             movementCore = core;
             controlAuthority = authority;
+            animationController = animController;
+        }
+
+        /// <summary>
+        /// 更新视图层动画（在远程客户端上应用动画参数）
+        /// </summary>
+        /// <param name="viewState">插值后的状态数据</param>
+        /// <param name="verifiedState">已验证的状态数据</param>
+        protected override void UpdateView(MovementData viewState, MovementData? verifiedState)
+        {
+            base.UpdateView(viewState, verifiedState);
+
+            // 应用动画参数到远程客户端的 Animator
+            if (animationController != null)
+            {
+                animationController.ApplyAnimationParameters(
+                    viewState.animMoveX,
+                    viewState.animMoveY,
+                    viewState.animSpeed
+                );
+            }
         }
 
         public override void Enter()
@@ -91,6 +114,19 @@ namespace Player.States
             movementCore.ApplyGravity(ref state.movementData, delta);
             movementCore.FinalizeMovement(ref state.movementData);
             state.lastInput = input;
+
+            // 计算并存储动画参数（用于同步到远程客户端）
+            if (animationController != null)
+            {
+                var (moveX, moveY, speed) = animationController.CalculateAnimationParameters(state.movementData, movementCore.MaxMoveSpeed);
+                state.animMoveX = moveX;
+                state.animMoveY = moveY;
+                state.animSpeed = speed;
+
+                // 本地客户端直接应用动画（拥有者）
+                if (machine.isOwner)
+                    animationController.ApplyAnimationParameters(moveX, moveY, speed);
+            }
         }
 
         protected override void GetFinalInput(ref MovementInput input)
@@ -126,6 +162,12 @@ namespace Player.States
         {
             public MovementCoreData movementData;
             public MovementInput lastInput;
+
+            // 动画参数（通过预测系统同步到所有客户端）
+            public float animMoveX;
+            public float animMoveY;
+            public float animSpeed;
+
             public void Dispose() { }
         }
     }
