@@ -13,6 +13,12 @@ namespace Player.Core
         public void Dispose() { }
     }
 
+    public enum InputSource
+    {
+        KBM,
+        Gamepad
+    }
+
     /// <summary>
     /// 直接从 Unity Input System 获取键盘/鼠标/手柄信息，向 <see cref="ControlAuthority"/> 提供简化的输入数据。
     /// 引入了 Capcom/Nintendo 风格的输入缓冲 (Input Buffering) 机制。
@@ -28,6 +34,8 @@ namespace Player.Core
         [SerializeField] private float bufferWindow = 0.15f; // 预输入缓冲窗口
 
         public PlayerInput currentInput;
+        public InputSource currentSource = InputSource.KBM;
+        public event System.Action<InputSource> OnInputSourceChanged;
 
         // 时间戳记录：记录每个动作最后一次按下和释放的时间
         private float _lastPrimaryAttackPressTime = -1f;
@@ -39,10 +47,36 @@ namespace Player.Core
         private float _lastGrapplePressTime = -1f;
         private float _lastGrappleReleaseTime = -1f;
 
+        private Vector2 _lastMousePosition;
+        private const float MouseMoveThreshold = 1f; // 鼠标移动阈值，防止微小抖动干扰
+
+        private void Start()
+        {
+            if (Mouse.current != null)
+            {
+                _lastMousePosition = Mouse.current.position.ReadValue();
+            }
+        }
+
         private void Update()
         {
+            // 每一帧开始时重置瞬时输入状态，确保在没有任何输入时停止动作
+            currentInput.movement = Vector2.zero;
+            currentInput.leftAttack = false;
+            currentInput.rightAttack = false;
+
             ApplyKeyboardMouseInput();
             ApplyGamepadInput();
+        }
+
+        private void SetInputSource(InputSource newSource)
+        {
+            if (currentSource != newSource)
+            {
+                currentSource = newSource;
+                OnInputSourceChanged?.Invoke(newSource);
+                // Debug.Log($"Input Source Switched to: {newSource}");
+            }
         }
 
         private void ApplyKeyboardMouseInput()
@@ -52,18 +86,43 @@ namespace Player.Core
             if (kbd == null || mouse == null)
                 return;
 
+            bool kbmActive = false;
+
+            // 1. 移动处理：键盘输入
             Vector2 move = Vector2.zero;
-            if (kbd.wKey.isPressed) move.y += 1f;
-            if (kbd.sKey.isPressed) move.y -= 1f;
-            if (kbd.aKey.isPressed) move.x -= 1f;
-            if (kbd.dKey.isPressed) move.x += 1f;
-            currentInput.movement = move.magnitude > 1f ? move.normalized : move;
+            bool hasKbdMove = false;
+            if (kbd.wKey.isPressed) { move.y += 1f; hasKbdMove = true; }
+            if (kbd.sKey.isPressed) { move.y -= 1f; hasKbdMove = true; }
+            if (kbd.aKey.isPressed) { move.x -= 1f; hasKbdMove = true; }
+            if (kbd.dKey.isPressed) { move.x += 1f; hasKbdMove = true; }
 
-            currentInput.aimWorldDirection = CalculateMouseWorldDirection(mouse.position.ReadValue());
+            if (hasKbdMove)
+            {
+                currentInput.movement = move.magnitude > 1f ? move.normalized : move;
+                kbmActive = true;
+            }
 
-            // 物理状态更新
-            currentInput.leftAttack = mouse.leftButton.isPressed;
-            currentInput.rightAttack = mouse.rightButton.isPressed;
+            // 2. 瞄准处理：只有当鼠标移动或点击时才更新
+            Vector2 currentMousePos = mouse.position.ReadValue();
+            float mouseDelta = (currentMousePos - _lastMousePosition).sqrMagnitude;
+            bool mouseMoved = mouseDelta > MouseMoveThreshold * MouseMoveThreshold;
+            bool mouseClicked = mouse.leftButton.isPressed || mouse.rightButton.isPressed;
+
+            if (mouseMoved || mouseClicked)
+            {
+                currentInput.aimWorldDirection = CalculateMouseWorldDirection(currentMousePos);
+                _lastMousePosition = currentMousePos;
+                kbmActive = true;
+            }
+
+            // 3. 动作键物理状态
+            if (mouse.leftButton.isPressed) { currentInput.leftAttack = true; kbmActive = true; }
+            if (mouse.rightButton.isPressed) { currentInput.rightAttack = true; kbmActive = true; }
+
+            // 检查键盘动作键 (空格和E)
+            if (kbd.spaceKey.wasPressedThisFrame || kbd.eKey.wasPressedThisFrame) kbmActive = true;
+
+            if (kbmActive) SetInputSource(InputSource.KBM);
 
             // 时间戳记录 (用于缓冲)
             if (mouse.leftButton.wasPressedThisFrame) _lastPrimaryAttackPressTime = Time.unscaledTime;
@@ -85,27 +144,43 @@ namespace Player.Core
             if (pad == null)
                 return;
 
+            bool padActive = false;
+
+            // 1. 移动处理：手柄左摇杆
             Vector2 moveInput = pad.leftStick.ReadValue();
             if (moveInput.magnitude > movementDeadzone)
             {
                 currentInput.movement = moveInput;
+                padActive = true;
             }
 
+            // 2. 瞄准处理：手柄右摇杆
             Vector2 rightStick = pad.rightStick.ReadValue();
             bool hasAimInput = rightStick.sqrMagnitude > gamepadAimThreshold * gamepadAimThreshold;
-            currentInput.aimWorldDirection = hasAimInput ? GetGamepadAimDirection(rightStick) : Vector3.zero;
+            if (hasAimInput)
+            {
+                currentInput.aimWorldDirection = GetGamepadAimDirection(rightStick);
+                padActive = true;
+            }
 
-            // 物理状态更新
+            // 3. 动作键物理状态
             bool leftPressed = pad.rightTrigger.ReadValue() > 0.5f;
             bool rightPressed = pad.leftTrigger.ReadValue() > 0.5f;
 
-            if (leftPressed && !currentInput.leftAttack) _lastPrimaryAttackPressTime = Time.unscaledTime;
-            if (!leftPressed && currentInput.leftAttack) _lastPrimaryAttackReleaseTime = Time.unscaledTime;
-            currentInput.leftAttack = leftPressed;
+            if (leftPressed || rightPressed) padActive = true;
+            if (pad.buttonSouth.isPressed || pad.buttonWest.isPressed || pad.buttonNorth.isPressed || pad.buttonEast.isPressed) padActive = true;
 
-            if (rightPressed && !currentInput.rightAttack) _lastSecondaryAttackPressTime = Time.unscaledTime;
-            if (!rightPressed && currentInput.rightAttack) _lastSecondaryAttackReleaseTime = Time.unscaledTime;
-            currentInput.rightAttack = rightPressed;
+            if (padActive) SetInputSource(InputSource.Gamepad);
+
+            // 记录按下/释放时间戳 (用于缓冲)
+            if (pad.rightTrigger.wasPressedThisFrame) _lastPrimaryAttackPressTime = Time.unscaledTime;
+            if (pad.rightTrigger.wasReleasedThisFrame) _lastPrimaryAttackReleaseTime = Time.unscaledTime;
+
+            if (pad.leftTrigger.wasPressedThisFrame) _lastSecondaryAttackPressTime = Time.unscaledTime;
+            if (pad.leftTrigger.wasReleasedThisFrame) _lastSecondaryAttackReleaseTime = Time.unscaledTime;
+
+            currentInput.leftAttack |= leftPressed;
+            currentInput.rightAttack |= rightPressed;
 
             if (pad.buttonSouth.wasPressedThisFrame) _lastDashPressTime = Time.unscaledTime;
             if (pad.buttonSouth.wasReleasedThisFrame) _lastDashReleaseTime = Time.unscaledTime;
