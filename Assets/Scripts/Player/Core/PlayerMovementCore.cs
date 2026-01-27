@@ -26,9 +26,6 @@ namespace Player.Core
         private CharacterController _controller;
         private Camera _mainCamera;
 
-        // 状态接力存储
-        private MovementCoreData _persistentState;
-
         public event System.Action OnLanded;
         public LayerMask GroundMask => groundMask;
         public float MaxMoveSpeed => maxMoveSpeed;
@@ -41,25 +38,25 @@ namespace Player.Core
 
             if (!_controller)
                 Debug.LogError("PlayerMovementCore requires a CharacterController.", this);
+        }
 
-            // 初始化持久状态
-            _persistentState = new MovementCoreData
+        public MovementCoreData CreateDefaultMovementData()
+        {
+            return new MovementCoreData
             {
+                position = transform.position,
                 velocity = Vector3.zero,
                 dashVelocity = Vector3.zero,
                 currentSpeed = 0f,
                 rotation = transform.rotation.eulerAngles.y,
                 rotationVelocity = 0f,
-                isGrounded = false,
+                isGrounded = _controller.isGrounded,
                 movementLocked = false,
                 rotationLocked = false,
                 rotationOverridden = false,
                 rotationOverrideAngle = 0f
             };
         }
-
-        public MovementCoreData GetPersistentState() => _persistentState;
-        public void UpdatePersistentState(MovementCoreData newState) => _persistentState = newState;
 
         public void ApplyGravity(ref MovementCoreData data, float delta)
         {
@@ -152,6 +149,22 @@ namespace Player.Core
         }
         public void ClearRotationOverride(ref MovementCoreData data) => data.rotationOverridden = false;
         public void SetDashVelocity(ref MovementCoreData data, Vector3 velocity) => data.dashVelocity = velocity;
+
+        public void ApplyRawMovement(Vector3 delta)
+        {
+            if (delta.sqrMagnitude > 0)
+            {
+                _controller.Move(delta);
+            }
+        }
+
+        // 核心修复：添加 OnAnimatorMove 回调来拦截 Unity 自动应用根运动的行为
+        // 当脚本中存在此方法时，Unity 不会再自动根据 Animator 的位移修改 Transform
+        // 这样我们可以安全地开启 applyRootMotion（防止回原点），同时在 MeleeStateNode 中手动通过预测系统应用位移（防止超速）
+        private void OnAnimatorMove()
+        {
+            // 故意留空，拦截自动位移
+        }
     }
 
     public struct MovementCoreData

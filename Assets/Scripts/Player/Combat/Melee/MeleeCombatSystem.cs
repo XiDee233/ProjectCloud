@@ -41,11 +41,21 @@ namespace Player.Combat.Melee
             // 初始化 PlayableGraph（不播放）
             if (combatPlayableGraph != null)
             {
-                combatPlayableGraph.Initialize(attackData.animationData);
+                combatPlayableGraph.Initialize(attackData.timelineAsset);
             }
 
             attackData.onAttackPerform?.Invoke(attackData);
             return true;
+        }
+
+        public void StopCombat()
+        {
+            if (combatPlayableGraph != null)
+            {
+                combatPlayableGraph.Stop();
+            }
+            IsAttacking = false;
+            CurrentAttack = null;
         }
 
         /// <summary>
@@ -70,16 +80,16 @@ namespace Player.Combat.Melee
         /// <summary>
         /// 更新战斗状态：由 StateSimulate 调用，更新 PlayableGraph 时间
         /// </summary>
-        public void UpdateCombatState(float elapsedTime)
+        public void UpdateCombatState(float elapsedTime, float delta)
         {
             if (combatPlayableGraph == null || !combatPlayableGraph.IsInitialized) return;
 
             // 更新 PlayableGraph 时间
             combatPlayableGraph.SetTime(elapsedTime);
-            combatPlayableGraph.Evaluate(0f); // 评估当前帧
+            combatPlayableGraph.Evaluate(delta); // 评估当前帧
 
             // 检查是否完成
-            if (elapsedTime >= CurrentAttack.animationData.TotalDuration || combatPlayableGraph.IsComplete())
+            if (elapsedTime >= CurrentAttack.TotalDuration || combatPlayableGraph.IsComplete())
             {
                 IsAttacking = false;
                 CurrentAttack = null;
@@ -96,6 +106,16 @@ namespace Player.Combat.Melee
                 return false;
 
             return combatPlayableGraph.IsInComboWindow();
+        }
+
+        public Vector3 GetDeltaPosition()
+        {
+            return combatPlayableGraph != null ? combatPlayableGraph.GetDeltaPosition() : Vector3.zero;
+        }
+
+        public Quaternion GetDeltaRotation()
+        {
+            return combatPlayableGraph != null ? combatPlayableGraph.GetDeltaRotation() : Quaternion.identity;
         }
     }
 }

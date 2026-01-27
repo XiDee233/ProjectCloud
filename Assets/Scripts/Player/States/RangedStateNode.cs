@@ -13,11 +13,11 @@ namespace Player.States
         [SerializeField] private RangedCombatSystem rangedCombatSystem;
         [SerializeField] private ControlAuthority controlAuthority;
 
-        public void Initialize(PlayerMovementCore core, RangedCombatSystem combatSystem, ControlAuthority authority)
+        private void Awake()
         {
-            movementCore = core;
-            rangedCombatSystem = combatSystem;
-            controlAuthority = authority;
+            if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
+            if (rangedCombatSystem == null) rangedCombatSystem = GetComponentInParent<RangedCombatSystem>();
+            if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
         }
 
         public override void Enter()
@@ -25,8 +25,7 @@ namespace Player.States
             base.Enter();
             if (movementCore != null)
             {
-                var data = movementCore.GetPersistentState();
-                // 远程攻击允许移动和旋转
+                var data = movementCore.CreateDefaultMovementData();
                 movementCore.SetMovementLocked(ref data, false);
                 movementCore.SetRotationLocked(ref data, false);
                 currentState = new RangedData { movementData = data, isInitialized = false, fired = false };
@@ -36,7 +35,7 @@ namespace Player.States
         public override void Exit()
         {
             base.Exit();
-            if (movementCore != null) movementCore.UpdatePersistentState(currentState.movementData);
+            if (rangedCombatSystem != null) rangedCombatSystem.StopCombat();
         }
 
         protected override void Simulate(RangedInput input, ref RangedData state, float delta) { }
@@ -68,11 +67,20 @@ namespace Player.States
                 state.fired = true;
             }
 
+            // 应用 Root Motion
+            Vector3 rootDelta = rangedCombatSystem.GetDeltaPosition();
+            if (rootDelta.sqrMagnitude > 0)
+            {
+                movementCore.ApplyRawMovement(rootDelta);
+            }
+
             // 如果射击完成且没有继续按键，返回移动状态
             if (state.fired && !rangedCombatSystem.IsFiring && !input.primaryAttack.isPressed)
             {
                 ReturnToMovement();
             }
+
+            movementCore.FinalizeMovement(ref state.movementData);
         }
 
         private void ReturnToMovement()

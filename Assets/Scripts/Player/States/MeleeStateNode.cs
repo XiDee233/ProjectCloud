@@ -14,11 +14,11 @@ namespace Player.States
         [SerializeField] private ControlAuthority controlAuthority;
         [SerializeField] private MeleeAttackData[] comboChain; // 连招链条：按顺序存储攻击数据
 
-        public void Initialize(PlayerMovementCore core, MeleeCombatSystem combatSystem, ControlAuthority authority)
+        private void Awake()
         {
-            movementCore = core;
-            meleeCombatSystem = combatSystem;
-            controlAuthority = authority;
+            if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
+            if (meleeCombatSystem == null) meleeCombatSystem = GetComponentInParent<MeleeCombatSystem>();
+            if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
         }
 
         public override void Enter()
@@ -26,7 +26,7 @@ namespace Player.States
             base.Enter();
             if (movementCore != null)
             {
-                var data = movementCore.GetPersistentState();
+                var data = movementCore.CreateDefaultMovementData();
                 movementCore.SetMovementLocked(ref data, true);
                 movementCore.SetRotationLocked(ref data, true);
                 currentState = new MeleeData { movementData = data, isInitialized = false, comboIndex = 0 };
@@ -36,7 +36,7 @@ namespace Player.States
         public override void Exit()
         {
             base.Exit();
-            if (movementCore != null) movementCore.UpdatePersistentState(currentState.movementData);
+            if (meleeCombatSystem != null) meleeCombatSystem.StopCombat();
         }
 
         protected override void Simulate(MeleeInput input, ref MeleeData state, float delta) { }
@@ -72,7 +72,14 @@ namespace Player.States
             state.elapsedTime = elapsedTime;
 
             // 更新战斗状态（推进 PlayableGraph）
-            meleeCombatSystem.UpdateCombatState(elapsedTime);
+            meleeCombatSystem.UpdateCombatState(elapsedTime, delta);
+
+            // 应用 Root Motion（手动提取并应用到预测状态）
+            Vector3 rootDelta = meleeCombatSystem.GetDeltaPosition();
+            if (rootDelta.sqrMagnitude > 0)
+            {
+                movementCore.ApplyRawMovement(rootDelta);
+            }
 
             // 连招检测：从 ComboWindowTrack 读取窗口状态
             state.isInComboWindow = meleeCombatSystem.GetComboWindowState();
@@ -102,6 +109,8 @@ namespace Player.States
             {
                 ReturnToMovement();
             }
+
+            movementCore.FinalizeMovement(ref state.movementData);
         }
 
         private MeleeAttackData GetNextComboAttack(int currentIndex)

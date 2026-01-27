@@ -12,12 +12,12 @@ namespace Player.States
         [SerializeField] private PlayerMovementCore movementCore;
         [SerializeField] private ControlAuthority controlAuthority;
         [SerializeField] private MovementAnimationController animationController;
-
-        public void Initialize(PlayerMovementCore core, ControlAuthority authority, MovementAnimationController animController = null)
+        
+        private void Awake()
         {
-            movementCore = core;
-            controlAuthority = authority;
-            animationController = animController;
+            if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
+            if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
+            if (animationController == null) animationController = GetComponentInParent<MovementAnimationController>();
         }
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace Player.States
             base.Enter();
             if (movementCore != null)
             {
-                var data = movementCore.GetPersistentState();
+                var data = movementCore.CreateDefaultMovementData();
                 movementCore.ClearRotationOverride(ref data);
                 movementCore.SetMovementLocked(ref data, false);
                 movementCore.SetRotationLocked(ref data, false);
@@ -57,10 +57,6 @@ namespace Player.States
         public override void Exit()
         {
             base.Exit();
-            if (movementCore != null)
-            {
-                movementCore.UpdatePersistentState(currentState.movementData);
-            }
         }
 
         // 空占位符方法，绕过 PurrNet 引擎的自动调用

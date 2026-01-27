@@ -7,8 +7,8 @@ namespace Player.Combat.Ranged
     public class RangedWeaponData : ScriptableObject
     {
         [Header("动画数据")]
-        public CombatTimelineData fireAnimationData;
-        public CombatTimelineData chargeAnimationData;
+        public UnityEngine.Timeline.TimelineAsset fireTimelineAsset;
+        public UnityEngine.Timeline.TimelineAsset chargeTimelineAsset;
 
         [Header("基础数值")]
         public float fireRate = 5f;

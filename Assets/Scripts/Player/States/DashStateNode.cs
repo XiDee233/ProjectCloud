@@ -23,10 +23,10 @@ namespace Player.States
         [SerializeField] private MMFeedbacks dashEndFeedbacks;
 
 
-        public void Initialize(PlayerMovementCore core, ControlAuthority authority)
+        private void Awake()
         {
-            movementCore = core;
-            controlAuthority = authority;
+            if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
+            if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
         }
 
         public override void Enter()
@@ -35,9 +35,8 @@ namespace Player.States
 
             if (movementCore != null)
             {
-                var data = movementCore.GetPersistentState();
+                var data = movementCore.CreateDefaultMovementData();
 
-                // 初始状态数据：初始化由StateSimulate的第一帧完成
                 currentState = new DashData
                 {
                     movementData = data,
@@ -55,16 +54,10 @@ namespace Player.States
             {
                 var data = currentState.movementData;
 
-                // 清除冲刺速度和锁定状态
                 movementCore.SetDashVelocity(ref data, Vector3.zero);
                 movementCore.SetMovementLocked(ref data, false);
                 movementCore.SetRotationLocked(ref data, false);
-
-                // 清除旋转覆盖，让常规移动接管
                 movementCore.ClearRotationOverride(ref data);
-
-                // 更新持久状态，确保状态机切换时数据一致
-                movementCore.UpdatePersistentState(data);
             }
             if (dashEndFeedbacks != null) dashEndFeedbacks.PlayFeedbacks();
         }

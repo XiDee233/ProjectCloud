@@ -6,7 +6,7 @@ namespace Player.Combat.Ranged
     [AddComponentMenu("Player/Combat/Ranged Combat System")]
     public class RangedCombatSystem : MonoBehaviour
     {
-        [SerializeField] private CombatTimelinePlayer timelinePlayer;
+        [SerializeField] private CombatPlayableGraph combatPlayableGraph;
         [SerializeField] private RangedWeaponData weaponData;
 
         public bool IsFiring { get; private set; }
@@ -17,7 +17,7 @@ namespace Player.Combat.Ranged
 
         private void Awake()
         {
-            if (!timelinePlayer) timelinePlayer = GetComponent<CombatTimelinePlayer>();
+            if (!combatPlayableGraph) combatPlayableGraph = GetComponent<CombatPlayableGraph>();
         }
 
         private void Update()
@@ -41,8 +41,8 @@ namespace Player.Combat.Ranged
             IsCharging = true;
             ChargeTimer = 0f;
             
-            if (weaponData.chargeAnimationData != null)
-                timelinePlayer.Play(weaponData.chargeAnimationData);
+            if (weaponData.chargeTimelineAsset != null)
+                combatPlayableGraph.Play(weaponData.chargeTimelineAsset);
         }
 
         public void Release()
@@ -63,14 +63,24 @@ namespace Player.Combat.Ranged
             return true;
         }
 
+        public void StopCombat()
+        {
+            IsFiring = false;
+            IsCharging = false;
+            if (combatPlayableGraph != null)
+            {
+                combatPlayableGraph.Stop();
+            }
+        }
+
         private void Fire(float chargePercent)
         {
             IsFiring = true;
             _cooldownTimer = 1f / weaponData.fireRate;
 
-            if (weaponData.fireAnimationData != null)
+            if (weaponData.fireTimelineAsset != null)
             {
-                timelinePlayer.Play(weaponData.fireAnimationData, () => {
+                combatPlayableGraph.Play(weaponData.fireTimelineAsset, () => {
                     IsFiring = false;
                 });
             }
@@ -83,5 +93,15 @@ namespace Player.Combat.Ranged
         }
 
         public RangedWeaponData WeaponData => weaponData;
+
+        public Vector3 GetDeltaPosition()
+        {
+            return combatPlayableGraph != null ? combatPlayableGraph.GetDeltaPosition() : Vector3.zero;
+        }
+
+        public Quaternion GetDeltaRotation()
+        {
+            return combatPlayableGraph != null ? combatPlayableGraph.GetDeltaRotation() : Quaternion.identity;
+        }
     }
 }

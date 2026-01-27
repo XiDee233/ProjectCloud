@@ -8,9 +8,10 @@ namespace Player.Combat.Tracks
     {
         [Header("判定参数")]
         public Vector3 offset;
-        public float radius = 0.5f;
+        public Vector3 size = Vector3.one;
         public int damage = 10;
         public float knockback = 5f;
+        public Color debugColor = new Color(1f, 0f, 0f, 0.4f);
         
         [Header("状态")]
         public bool isActive = false;

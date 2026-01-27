@@ -826,7 +826,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a1392aa1bc3d3b4a9ef31b6e6d8d4b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 3940064594787550966, guid: ff7e2dfe2da3bc84c8c51ef3f612843f,
+  _playerPrefab: {fileID: 770361150387385107, guid: 9322161e0fc39ba47bb0dc3f07cf50b9,
     type: 3}
   _destroyOnDisconnect: 0
   spawnPoints:

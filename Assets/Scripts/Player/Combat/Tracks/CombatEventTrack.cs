@@ -3,7 +3,7 @@ using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using System;
 
-namespace Player.Combat
+namespace Player.Combat.Tracks
 {
     [TrackColor(0.855f, 0.8623f, 0.87f)]
     [TrackClipType(typeof(CombatEventClip))]
