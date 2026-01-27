@@ -104,6 +104,13 @@ namespace Player.States
                 }
             }
 
+            // 方向输入检测：在连招窗口开启时，如果检测到方向输入，立即切换到移动状态
+            if (state.isInComboWindow && input.movement.sqrMagnitude > 0.01f)
+            {
+                ReturnToMovement();
+                return;
+            }
+
             // 攻击完成，返回移动状态
             if (!meleeCombatSystem.IsAttacking)
             {
@@ -134,6 +141,7 @@ namespace Player.States
             var p = controlAuthority != null ? controlAuthority.CurrentProvider : null;
             if (p == null) { input.Reset(); return; }
 
+            input.movement = p.Movement;
             input.primaryAttack = p.PrimaryAttack;
             // 注意：这里不消费输入，让 StateSimulate 在连招窗口检查时再消费
 
@@ -142,9 +150,10 @@ namespace Player.States
 
         public struct MeleeInput : IPredictedData
         {
+            public Vector2 movement;
             public InputButtonState primaryAttack;
             public Vector3 aimDirection;
-            public void Reset() { primaryAttack = InputButtonState.None; aimDirection = Vector3.zero; }
+            public void Reset() { movement = Vector2.zero; primaryAttack = InputButtonState.None; aimDirection = Vector3.zero; }
             public void Dispose() { }
         }
 
