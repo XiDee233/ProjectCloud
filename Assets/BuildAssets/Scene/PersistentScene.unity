@@ -610,11 +610,22 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 11400000, guid: d0fe26fbbe3fac14f90c2fed31ab8bec,
         type: 2}
+    - target: {fileID: 1758146157650799449, guid: 9322161e0fc39ba47bb0dc3f07cf50b9,
+        type: 3}
+      propertyPath: m_SceneBindings.Array.data[1].value
+      value: 
+      objectReference: {fileID: 821091072}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 9322161e0fc39ba47bb0dc3f07cf50b9, type: 3}
+--- !u!4 &821091072 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3808869791467887589, guid: 9322161e0fc39ba47bb0dc3f07cf50b9,
+    type: 3}
+  m_PrefabInstance: {fileID: 821091071}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

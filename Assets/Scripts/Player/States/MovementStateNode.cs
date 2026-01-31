@@ -4,6 +4,7 @@ using Player.Animation;
 using PurrNet.Prediction;
 using PurrNet.Prediction.StateMachine;
 using System.Linq;
+using Player.Combat.Melee;
 
 namespace Player.States
 {
@@ -12,32 +13,15 @@ namespace Player.States
         [SerializeField] private PlayerMovementCore movementCore;
         [SerializeField] private ControlAuthority controlAuthority;
         [SerializeField] private MovementAnimationController animationController;
+        [SerializeField] private ComboTree comboTree;
+
+        private ComboResolver _comboResolver;
         
         private void Awake()
         {
             if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
             if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
             if (animationController == null) animationController = GetComponentInParent<MovementAnimationController>();
-        }
-
-        /// <summary>
-        /// 更新视图层动画（在远程客户端上应用动画参数）
-        /// </summary>
-        /// <param name="viewState">插值后的状态数据</param>
-        /// <param name="verifiedState">已验证的状态数据</param>
-        protected override void UpdateView(MovementData viewState, MovementData? verifiedState)
-        {
-            base.UpdateView(viewState, verifiedState);
-
-            // 应用动画参数到远程客户端的 Animator
-            if (animationController != null)
-            {
-                animationController.ApplyAnimationParameters(
-                    viewState.animMoveX,
-                    viewState.animMoveY,
-                    viewState.animSpeed
-                );
-            }
         }
 
         public override void Enter()
@@ -59,45 +43,64 @@ namespace Player.States
             base.Exit();
         }
 
-        // 空占位符方法，绕过 PurrNet 引擎的自动调用
         protected override void Simulate(MovementInput input, ref MovementData state, float delta) { }
 
         protected override void StateSimulate(in MovementInput input, ref MovementData state, float delta)
         {
             if (movementCore == null) return;
 
-            // 如果不是拥有者，且不是服务器，我们不应该运行模拟逻辑
-            if (!machine.isOwner && !machine.isServer) return;
-
+            // 所有客户端都执行移动模拟
             movementCore.UpdateGroundedState(ref state.movementData);
 
-            if (machine != null)
+            // Dash 检测（所有客户端执行，Owner用真实输入，远程用外推输入）
+            bool dashTapped = inputCollector != null && 
+                              inputCollector.InputState.dashIsPressed && 
+                              !inputCollector.InputState.prevDashIsPressed;
+
+            if (machine != null && dashTapped)
             {
-                if (input.dash.wasPressed) 
+                var dash = machine.states.FirstOrDefault(x => x is DashStateNode);
+                if (dash != null)
                 {
-                    var s = machine.states.FirstOrDefault(x => x is DashStateNode); if (s != null) 
-                    { 
-                        machine.SetState(s); 
-                        return; 
-                    } 
-                }
-                if (input.primaryAttack.wasPressed) 
-                { 
-                    var s = machine.states.FirstOrDefault(x => x is MeleeStateNode); if (s != null) 
-                    { 
-                        machine.SetState(s); 
-                        return;
-                    } 
-                }
-                if (input.secondaryAttack.wasPressed) 
-                { 
-                    var s = machine.states.FirstOrDefault(x => x is RangedStateNode); if (s != null) 
-                    { 
-                        machine.SetState(s); return; 
-                    } 
+                    machine.SetState(dash);
+                    return;
                 }
             }
 
+            // 基础连招：移动状态下允许消耗输入缓冲去匹配起手
+            // 所有客户端执行，Owner用真实输入，远程用外推输入
+            if (inputCollector != null)
+            {
+                var buffer = inputCollector.ComboBuffer;
+                float now = inputCollector.NowSeconds;
+
+                if (comboTree != null && buffer != null)
+                {
+                    _comboResolver ??= new ComboResolver(comboTree, buffer);
+
+                    if (_comboResolver.TryResolveEntry(now, out var entryNode, out int consumeCount))
+                    {
+                        buffer.ConsumePrefix(consumeCount);
+
+                        var melee = machine.states.FirstOrDefault(x => x is MeleeStateNode) as MeleeStateNode;
+                        if (melee != null)
+                        {
+                            melee.SetEntryCombo(entryNode, buffer, _comboResolver, now);
+                            machine.SetState(melee);
+                            return;
+                        }
+
+                        var ranged = machine.states.FirstOrDefault(x => x is RangedStateNode) as RangedStateNode;
+                        if (ranged != null && entryNode.name.Contains("Ranged"))
+                        {
+                            machine.SetState(ranged);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 移动计算（所有客户端执行）
             Vector3 moveDir = movementCore.CalculateCameraRelativeMovement(input.movement);
             movementCore.ApplyAcceleratedMovement(ref state.movementData, moveDir, delta);
 
@@ -111,46 +114,51 @@ namespace Player.States
             movementCore.FinalizeMovement(ref state.movementData);
             state.lastInput = input;
 
-            // 计算并存储动画参数（用于同步到远程客户端）
+            // 计算并存储动画参数（用于同步到所有客户端）
             if (animationController != null)
             {
                 var (moveX, moveY, speed) = animationController.CalculateAnimationParameters(state.movementData, movementCore.MaxMoveSpeed);
                 state.animMoveX = moveX;
                 state.animMoveY = moveY;
                 state.animSpeed = speed;
-
-                // 本地客户端直接应用动画（拥有者）
-                if (machine.isOwner)
-                    animationController.ApplyAnimationParameters(moveX, moveY, speed);
             }
         }
 
+        /// <summary>
+        /// 视图层更新 - 所有客户端都会调用，用于更新动画
+        /// </summary>
+        protected override void UpdateView(MovementData viewState, MovementData? verifiedState)
+        {
+            base.UpdateView(viewState, verifiedState);
+
+            // 所有客户端都应用动画参数
+            if (animationController != null)
+            {
+                animationController.ApplyAnimationParameters(
+                    viewState.animMoveX,
+                    viewState.animMoveY,
+                    viewState.animSpeed
+                );
+            }
+        }
+
+        [SerializeField] private PredictedPlayerInputCollector inputCollector;
+
         protected override void GetFinalInput(ref MovementInput input)
         {
-            var p = controlAuthority != null ? controlAuthority.CurrentProvider : null;
-            if (p == null) { input.Reset(); return; }
-            input.movement = p.Movement;
-            
-            input.dash = p.Dash;
-            if (input.dash.wasPressed) p.ConsumeInput(InputActionType.Dash);
+            var collector = inputCollector;
+            if (collector == null) { input.Reset(); return; }
 
-            input.primaryAttack = p.PrimaryAttack;
-            if (input.primaryAttack.wasPressed) p.ConsumeInput(InputActionType.PrimaryAttack);
-
-            input.secondaryAttack = p.SecondaryAttack;
-            if (input.secondaryAttack.wasPressed) p.ConsumeInput(InputActionType.SecondaryAttack);
-
-            input.aimDirection = p.AimWorldDirection;
+            var c = collector.InputState;
+            input.movement = c.movement;
+            input.aimDirection = c.aimWorldDirection;
         }
 
         public struct MovementInput : IPredictedData
         {
             public Vector2 movement;
             public Vector3 aimDirection;
-            public InputButtonState dash;
-            public InputButtonState primaryAttack;
-            public InputButtonState secondaryAttack;
-            public void Reset() { movement = Vector2.zero; aimDirection = Vector3.zero; dash = primaryAttack = secondaryAttack = InputButtonState.None; }
+            public void Reset() { movement = Vector2.zero; aimDirection = Vector3.zero; }
             public void Dispose() { }
         }
 

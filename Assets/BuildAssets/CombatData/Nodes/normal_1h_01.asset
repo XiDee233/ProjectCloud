@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa68234a70dc92f4b845f3b4dee2d4ad, type: 3}
+  m_Name: normal_1h_01
+  m_EditorClassIdentifier: 
+  attackName: normal_1h_01
+  timelineAsset: {fileID: 11400000, guid: d0fe26fbbe3fac14f90c2fed31ab8bec, type: 2}
+  lockRotation: 1
+  movementSpeedMultiplier: 0
+  isEntry: 1
+  entryInput: {fileID: 11400000, guid: df4e48b24ed56684d8e78fccc0af69d9, type: 2}
+  transitions:
+  - {fileID: 11400000, guid: 8894c8befa1729a46ac1b1c3f4f44c9f, type: 2}
+  entryPriority: 0

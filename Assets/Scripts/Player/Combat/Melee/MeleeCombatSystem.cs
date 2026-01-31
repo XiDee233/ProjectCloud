@@ -8,43 +8,36 @@ namespace Player.Combat.Melee
     public class MeleeCombatSystem : MonoBehaviour
     {
         [SerializeField] private CombatPlayableGraph combatPlayableGraph;
-        [SerializeField] private MeleeAttackData defaultAttack;
 
-        public bool IsAttacking { get; private set; }
-        public MeleeAttackData CurrentAttack { get; private set; }
+        public bool IsAttacking { get; set; }
+        public ComboNode CurrentNode { get; set; }
 
-        public event Action OnAttackComplete;
+
+        public void SetCurrentNode(ComboNode node)
+        {
+            CurrentNode = node;
+        }
 
         private void Awake()
         {
             if (!combatPlayableGraph) combatPlayableGraph = GetComponent<CombatPlayableGraph>();
         }
 
-        public bool CanStartAttack()
-        {
-            return !IsAttacking;
-        }
 
-        public bool TryAttack()
-        {
-            return TryAttack(defaultAttack);
-        }
 
-        public bool TryAttack(MeleeAttackData attackData)
+        public bool TryAttack(ComboNode node)
         {
-            if (attackData == null || !CanStartAttack())
+            if (node == null || node.timelineAsset == null)
                 return false;
 
-            CurrentAttack = attackData;
+            CurrentNode = node;
             IsAttacking = true;
 
-            // 初始化 PlayableGraph（不播放）
             if (combatPlayableGraph != null)
             {
-                combatPlayableGraph.Initialize(attackData.timelineAsset);
+                combatPlayableGraph.Initialize(node.timelineAsset);
             }
 
-            attackData.onAttackPerform?.Invoke(attackData);
             return true;
         }
 
@@ -55,51 +48,44 @@ namespace Player.Combat.Melee
                 combatPlayableGraph.Stop();
             }
             IsAttacking = false;
-            CurrentAttack = null;
+            Debug.Log("syb______stop!!" + Time.time);
+            CurrentNode = null;
         }
 
-        /// <summary>
-        /// 请求连招：由状态机在检测到输入缓冲时调用
-        /// 只有在连招窗口开启时才能执行，否则忽略（依赖 wasPressed 的缓冲机制）
-        /// </summary>
-        public bool TryCombo(MeleeAttackData nextAttack)
+        public bool TryCombo(ComboNode nextNode)
         {
-            if (nextAttack == null) return false;
-
-            // 检查是否可以从当前攻击连到下一个攻击
-            if (CurrentAttack != null && CurrentAttack.canComboTo != null)
-            {
-                if (!CurrentAttack.canComboTo(nextAttack))
-                    return false;
-            }
-
-            // 窗口开启，立即执行
-            return TryAttack(nextAttack);
+            if (nextNode == null) return false;
+            return TryAttack(nextNode);
         }
 
-        /// <summary>
-        /// 更新战斗状态：由 StateSimulate 调用，更新 PlayableGraph 时间
-        /// </summary>
         public void UpdateCombatState(float elapsedTime, float delta)
         {
             if (combatPlayableGraph == null || !combatPlayableGraph.IsInitialized) return;
 
-            // 更新 PlayableGraph 时间
             combatPlayableGraph.SetTime(elapsedTime);
-            combatPlayableGraph.Evaluate(delta); // 评估当前帧
-
-            // 检查是否完成
-            if (elapsedTime >= CurrentAttack.TotalDuration || combatPlayableGraph.IsComplete())
-            {
-                IsAttacking = false;
-                CurrentAttack = null;
-                OnAttackComplete?.Invoke();
-            }
+            combatPlayableGraph.Evaluate();
         }
 
-        /// <summary>
-        /// 获取连招窗口状态：从 ComboWindowTrack 的 Mixer 读取当前窗口状态
-        /// </summary>
+        public bool CheckAttackComplete(float elapsedTime)
+        {
+            if (CurrentNode == null)
+            {
+                Debug.Log($"[CheckAttackComplete] 返回true原因: CurrentNode == null, elapsedTime={elapsedTime:F3}");
+                return true;
+            }
+            if (elapsedTime >= CurrentNode.TotalDuration)
+            {
+                Debug.Log($"[CheckAttackComplete] 返回true原因: elapsedTime({elapsedTime:F3}) >= TotalDuration({CurrentNode.TotalDuration:F3}), Node={CurrentNode.name}");
+                return true;
+            }
+            if (combatPlayableGraph != null && combatPlayableGraph.IsComplete())
+            {
+                Debug.Log($"[CheckAttackComplete] 返回true原因: combatPlayableGraph.IsComplete() == true, elapsedTime={elapsedTime:F3}, Node={CurrentNode.name}");
+                return true;
+            }
+            return false;
+        }
+
         public bool GetComboWindowState()
         {
             if (combatPlayableGraph == null || !combatPlayableGraph.IsInitialized)

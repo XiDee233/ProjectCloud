@@ -92,19 +92,18 @@ namespace Player.States
             }
         }
 
+        [SerializeField] private PredictedPlayerInputCollector inputCollector;
+
         protected override void GetFinalInput(ref RangedInput input)
         {
-            var p = controlAuthority != null ? controlAuthority.CurrentProvider : null;
-            if (p == null) { input.Reset(); return; }
-            
-            input.movement = p.Movement;
-            input.primaryAttack = p.PrimaryAttack;
-            if (input.primaryAttack.wasPressed) p.ConsumeInput(InputActionType.PrimaryAttack);
+            if (inputCollector == null) inputCollector = GetComponentInParent<PredictedPlayerInputCollector>();
+            if (inputCollector == null) { input.Reset(); return; }
 
-            input.secondaryAttack = p.SecondaryAttack;
-            if (input.secondaryAttack.wasPressed) p.ConsumeInput(InputActionType.SecondaryAttack);
-
-            input.aimDirection = p.AimWorldDirection;
+            //var c = inputCollector.Current;
+            //input.movement = c.movement;
+            //input.primaryAttack = c.primaryAttack;
+            //input.secondaryAttack = c.secondaryAttack;
+            //input.aimDirection = c.aimWorldDirection;
         }
 
         public struct RangedInput : IPredictedData

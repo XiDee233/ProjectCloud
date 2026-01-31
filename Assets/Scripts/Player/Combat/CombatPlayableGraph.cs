@@ -3,6 +3,7 @@ using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using System.Collections.Generic;
 using Player.Combat.Tracks;
+using PurrNet.Prediction;
 
 namespace Player.Combat
 {
@@ -53,6 +54,7 @@ namespace Player.Combat
 
             // 移除手动 Destroy 调用，由 Director 接管生命周期
             _currentTimelineAsset = timelineAsset;
+            Debug.Log("syb_asset:" + timelineAsset.name +"//"+Time.time);
             _duration = timelineAsset.duration;
             _currentTime = 0;
             _isInComboWindow = false;
@@ -66,8 +68,13 @@ namespace Player.Combat
                 
                 // 核心修复：暂时禁用 Animator Controller，防止与 Timeline 冲突
                 // Animator Controller 会持续播放动画并覆盖 Timeline 的输出
-                _cachedAnimatorController = _animator.runtimeAnimatorController;
+                // 只在第一次初始化时保存原始 Controller（连招时避免覆盖为null）
+                if (_cachedAnimatorController == null)
+                {
+                    _cachedAnimatorController = _animator.runtimeAnimatorController;
+                }
                 _animator.runtimeAnimatorController = null;
+                Debug.Log("syb_setAnimatorNull" + Time.time);
             }
 
             // 绑定轨道到相应对象
@@ -124,6 +131,7 @@ namespace Player.Combat
             {
                 _director.Stop();
                 _director.playableAsset = null;
+                Debug.Log("syb_setAssetNull" + Time.time);
             }
 
             if (_animator)
@@ -134,6 +142,7 @@ namespace Player.Combat
                 if (_cachedAnimatorController != null)
                 {
                     _animator.runtimeAnimatorController = _cachedAnimatorController;
+                    Debug.Log("syb_setAnimatorCached" + Time.time);
                     _cachedAnimatorController = null;
                 }
                 
@@ -152,7 +161,7 @@ namespace Player.Combat
             _director.time = _currentTime;
         }
 
-        public void Evaluate(float delta)
+        public void Evaluate()
         {
             if (!_graph.IsValid()) return;
 

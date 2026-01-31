@@ -12,6 +12,7 @@ namespace Player.States
         [Header("核心引用")]
         [SerializeField] private PlayerMovementCore movementCore;
         [SerializeField] private ControlAuthority controlAuthority;
+        [SerializeField] private PredictedPlayerInputCollector inputCollector;
 
         [Header("冲刺参数")]
         [SerializeField] private float dashDistance = 8f;
@@ -27,6 +28,7 @@ namespace Player.States
         {
             if (movementCore == null) movementCore = GetComponentInParent<PlayerMovementCore>();
             if (controlAuthority == null) controlAuthority = GetComponentInParent<ControlAuthority>();
+            if (inputCollector == null) inputCollector = GetComponentInParent<PredictedPlayerInputCollector>();
         }
 
         public override void Enter()
@@ -144,29 +146,26 @@ namespace Player.States
 
         protected override void GetFinalInput(ref DashInput input)
         {
-            var p = controlAuthority != null ? controlAuthority.CurrentProvider : null;
-            if (p == null) { input.Reset(); return; }
 
-            // 使用与CalculateDashDirection相同的优先级逻辑
-            if (p.Movement.sqrMagnitude > 0.01f)
+            var c = inputCollector.InputState;
+
+            // 使用与 CalculateDashDirection 相同的优先级逻辑，但输入来源必须是预测系统采样值
+            if (c.movement.sqrMagnitude > 0.01f)
             {
-                // 移动输入：转换为相机相对方向
-                input.direction = movementCore != null
-                    ? movementCore.CalculateCameraRelativeMovement(p.Movement).normalized
-                    : new Vector3(p.Movement.x, 0f, p.Movement.y).normalized;
+                input.direction = movementCore.CalculateCameraRelativeMovement(c.movement).normalized;
+
+                return;
             }
-            else if (p.AimWorldDirection.sqrMagnitude > 0.01f)
+
+            if (c.aimWorldDirection.sqrMagnitude > 0.01f)
             {
-                // 瞄准方向：投影到水平面
-                Vector3 aimDir = p.AimWorldDirection;
+                var aimDir = c.aimWorldDirection;
                 aimDir.y = 0f;
                 input.direction = aimDir.normalized;
+                return;
             }
-            else
-            {
-                // 默认：正前方
-                input.direction = Vector3.forward;
-            }
+
+            input.direction = Vector3.forward;
         }
 
         public struct DashInput : IPredictedData
